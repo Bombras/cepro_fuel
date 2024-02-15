@@ -20,19 +20,16 @@ class request_body_enum(Enum):
     encyclopedia = '{"encyklopedie": {"full": true}, "version": 5}'
     stations = '{"search": {"exclude_cs_ceny": false,"exclude_cs_kvalita": false},"version": 5}'
 
-info = info_type_enum.encyclopedia.value
-request_body_enum[info].value
-
-def data_download(info_type: info_type_enum, development: False):
+def data_download(info_type: info_type_enum, dev_mode: bool):
     req_url = 'https://einfo.ceproas.cz/cepro_portal_ws/rest/common/prox/mobileData'
     req_header = {'authorization': 'Basic bW9iYXA6RVdpa0Ey',
               'content-type': 'application/json; charset=UTF-8',
               'accept-encoding': 'gzip',
               'user-agent': 'okhttp/4.9.0'}
-    if development == True:
+    if dev_mode == True:
         # For development, load files from project
-        response = pd.read_pickle(f'cepro_fuel_app/_data/{info_type.value}.pickle')
-        return response
+        response = pd.read_pickle(f'_data/{info_type.value}.pickle')
+        return response.json()
     else:
         try:
             response = req.post(url=req_url, headers=req_header, data=request_body_enum[info_type.value].value, timeout = 10)
@@ -45,6 +42,10 @@ def data_download(info_type: info_type_enum, development: False):
             st.error('ERROR : Something went wrong.')
             st.stop()
 
+def check_for_errors_in_response(response_json):
+    #  check for errors in json files
+    if response_json['success'] is not True:
+        st.error(response_json['Error']['errorText'])
 
 def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """

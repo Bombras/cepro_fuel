@@ -1,48 +1,42 @@
 # streamlit run ./cepro_fuel_app/cepro_fuel_app.py
-from src.utils import filter_dataframe, info_type_enum, data_download
+from cepro_fuel.utils import filter_dataframe, info_type_enum, data_download, check_for_errors_in_response
 import streamlit as st
 import pandas as pd
-import requests as req
-import copy
 import leafmap.foliumap as leafmap
-import os
 import leafmap as lm
-import argparse
 
-parser = argparse.ArgumentParser()
+development = True # or False
 
-parser.add_argument(
-    "--dev",
-    action="append",
-    default=[],
-    help="Start development mode",
-)
+encyclopedia_response = data_download(info_type = info_type_enum.encyclopedia, dev_mode=development)
+stations_response = data_download(info_type = info_type_enum.stations, dev_mode=development)
 
-try:
-    args = parser.parse_args()
-except SystemExit as e:
-    os._exit(e.code)
+check_for_errors_in_response(response_json = encyclopedia_response)
+check_for_errors_in_response(response_json = stations_response)
+
+"""
+Data from stations
+"""
+stations_data = stations_response['Data']
+
+products_list = pd.DataFrame(stations_data['cis_prod_list'])[['nazev_produkt', 'kod_produkt']]
+gs_prices = pd.concat([
+    pd.DataFrame(stations_data['cs_ceny']).explode('ceny').reset_index()
+    , pd.DataFrame(pd.DataFrame(stations_data['cs_ceny']).explode('ceny')['ceny'].tolist()).reset_index()
+    ]
+    , axis=1)[['kod_cs', 'cena', 'kod_produkt']]
+gs_prices = gs_prices.merge(products_list, how='inner', on='kod_produkt').drop('county_name', axis='columns', inplace=True)
 
 
 
-data_download(info_type = info_type_enum.encyclopedia, development=True)
-data_download(info_type = info_type_enum.stations, development=True)
+product_quality_list = pd.DataFrame(stations_data['cis_kvalita_list'])[['jednotka_parametr', 'kod_parametr', 'nazev_parametr']]
+gs_product_quality = pd.DataFrame()
+for gs_product in stations_data['cs_kvalita']:
+    gs_number = gs_product['kod_cs']
+    product_quality_gs = pd.DataFrame(pd.DataFrame(gs_product['produkty']).explode('parametry')['parametry'].to_list())
+    product_quality_gs['kod_cs'] = gs_number
+    gs_product_quality = pd.concat([gs_product_quality,product_quality_gs], axis='index')
+gs_product_quality = gs_product_quality.merge(product_quality_list, how='inner', on='kod_parametr')
 
-
-
-
-# # for development
-# all_gs = copy.deepcopy(response_gas_stations.json())
-# encyclopedia_info = copy.deepcopy(response_encyclopedia.json())
-
-# # check for errors in json files
-# if all_gs['success'] is not True:
-#     error_msg_all_gs = all_gs['Error']['errorText']
-#     print(error_msg_all_gs)
-
-# if encyclopedia_info['success'] is not True:
-#     error_msg_encyclopedia_info = encyclopedia_info['Error']['errorText']
-#     print(error_msg_encyclopedia_info)
 
 # # gas stations
 # data_gs = all_gs['Data']
